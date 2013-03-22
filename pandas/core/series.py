@@ -14,13 +14,15 @@ from numpy import nan, ndarray
 import numpy as np
 import numpy.ma as ma
 
-from pandas.core.common import (isnull, notnull, _is_bool_indexer,
-                                _default_index, _maybe_promote, _maybe_upcast,
+from pandas.core.common import (isnull, notnull, aligned_empty,
+                                _is_bool_indexer, _default_index,
+                                _maybe_promote, _maybe_upcast,
                                 _asarray_tuplesafe, is_integer_dtype,
                                 _infer_dtype_from_scalar, is_list_like)
 from pandas.core.index import (Index, MultiIndex, InvalidIndexError,
                                _ensure_index, _handle_legacy_indexes)
-from pandas.core.indexing import _SeriesIndexer, _check_bool_indexer, _check_slice_bounds
+from pandas.core.indexing import (_SeriesIndexer, _check_bool_indexer,
+                                  _check_slice_bounds)
 from pandas.tseries.index import DatetimeIndex
 from pandas.tseries.period import PeriodIndex, Period
 from pandas.util import py3compat
@@ -283,7 +285,7 @@ def _radd_compat(left, right):
         cond = (_np_version_under1p6 and
                 left.dtype == np.object_)
         if cond:  # pragma: no cover
-            output = np.empty_like(left)
+            output = aligned_empty(left.shape, left.dtype)
             output.flat[:] = [radd(x, right) for x in left.flat]
         else:
             raise

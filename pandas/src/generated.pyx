@@ -2599,19 +2599,79 @@ def take_2d_axis0_bool_bool(ndarray[uint8_t, ndim=2] values,
             uint8_t *v, *o
 
         if (values.strides[1] == out.strides[1] and
-            values.strides[1] == sizeof(uint8_t) and
-            sizeof(uint8_t) * n >= 256):
+            values.strides[1] == sizeof(uint8_t)):
 
-            for i from 0 <= i < n:
-                idx = indexer[i]
-                if idx == -1:
-                    for j from 0 <= j < k:
-                        out[i, j] = fv
-                else:
-                    v = &values[idx, 0]
-                    o = &out[i, 0]
-                    memmove(o, v, <size_t>(sizeof(uint8_t) * k))
-            return
+            # GH3130
+            if sizeof(uint8_t) * k >= 256:
+                for i from 0 <= i < n:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        memmove(o, v, <size_t>(sizeof(uint8_t) * k))
+                return
+
+            # detect 128-bit alignment
+            elif (values.strides[0] % 16 == 0 and
+                  out.strides[0] % 16 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 16 == 0):
+                for i from 0 <= i < n:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                return
+
+            # detect 64-bit alignment and at least 32 bytes
+            elif (sizeof(uint8_t) * k >= 32 and
+                  values.strides[0] % 8 == 0 and
+                  out.strides[0] % 8 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 8 == 0):
+                # split cases by parity to help out the branch predictor
+                for i from 0 <= i < n by 2:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    elif idx % 2 == 0:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                for i from 1 <= i < n by 2:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    elif idx % 2 == 0:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                return
+
 
     for i from 0 <= i < n:
         idx = indexer[i]
@@ -2642,19 +2702,79 @@ def take_2d_axis0_bool_object(ndarray[uint8_t, ndim=2] values,
             object *v, *o
 
         if (values.strides[1] == out.strides[1] and
-            values.strides[1] == sizeof(object) and
-            sizeof(object) * n >= 256):
+            values.strides[1] == sizeof(object)):
 
-            for i from 0 <= i < n:
-                idx = indexer[i]
-                if idx == -1:
-                    for j from 0 <= j < k:
-                        out[i, j] = fv
-                else:
-                    v = &values[idx, 0]
-                    o = &out[i, 0]
-                    memmove(o, v, <size_t>(sizeof(object) * k))
-            return
+            # GH3130
+            if sizeof(object) * k >= 256:
+                for i from 0 <= i < n:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        memmove(o, v, <size_t>(sizeof(object) * k))
+                return
+
+            # detect 128-bit alignment
+            elif (values.strides[0] % 16 == 0 and
+                  out.strides[0] % 16 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 16 == 0):
+                for i from 0 <= i < n:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                return
+
+            # detect 64-bit alignment and at least 32 bytes
+            elif (sizeof(object) * k >= 32 and
+                  values.strides[0] % 8 == 0 and
+                  out.strides[0] % 8 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 8 == 0):
+                # split cases by parity to help out the branch predictor
+                for i from 0 <= i < n by 2:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    elif idx % 2 == 0:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                for i from 1 <= i < n by 2:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    elif idx % 2 == 0:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                return
+
 
     for i from 0 <= i < n:
         idx = indexer[i]
@@ -2685,19 +2805,79 @@ def take_2d_axis0_int8_int8(ndarray[int8_t, ndim=2] values,
             int8_t *v, *o
 
         if (values.strides[1] == out.strides[1] and
-            values.strides[1] == sizeof(int8_t) and
-            sizeof(int8_t) * n >= 256):
+            values.strides[1] == sizeof(int8_t)):
 
-            for i from 0 <= i < n:
-                idx = indexer[i]
-                if idx == -1:
-                    for j from 0 <= j < k:
-                        out[i, j] = fv
-                else:
-                    v = &values[idx, 0]
-                    o = &out[i, 0]
-                    memmove(o, v, <size_t>(sizeof(int8_t) * k))
-            return
+            # GH3130
+            if sizeof(int8_t) * k >= 256:
+                for i from 0 <= i < n:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        memmove(o, v, <size_t>(sizeof(int8_t) * k))
+                return
+
+            # detect 128-bit alignment
+            elif (values.strides[0] % 16 == 0 and
+                  out.strides[0] % 16 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 16 == 0):
+                for i from 0 <= i < n:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                return
+
+            # detect 64-bit alignment and at least 32 bytes
+            elif (sizeof(int8_t) * k >= 32 and
+                  values.strides[0] % 8 == 0 and
+                  out.strides[0] % 8 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 8 == 0):
+                # split cases by parity to help out the branch predictor
+                for i from 0 <= i < n by 2:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    elif idx % 2 == 0:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                for i from 1 <= i < n by 2:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    elif idx % 2 == 0:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                return
+
 
     for i from 0 <= i < n:
         idx = indexer[i]
@@ -2728,19 +2908,79 @@ def take_2d_axis0_int8_int32(ndarray[int8_t, ndim=2] values,
             int32_t *v, *o
 
         if (values.strides[1] == out.strides[1] and
-            values.strides[1] == sizeof(int32_t) and
-            sizeof(int32_t) * n >= 256):
+            values.strides[1] == sizeof(int32_t)):
 
-            for i from 0 <= i < n:
-                idx = indexer[i]
-                if idx == -1:
-                    for j from 0 <= j < k:
-                        out[i, j] = fv
-                else:
-                    v = &values[idx, 0]
-                    o = &out[i, 0]
-                    memmove(o, v, <size_t>(sizeof(int32_t) * k))
-            return
+            # GH3130
+            if sizeof(int32_t) * k >= 256:
+                for i from 0 <= i < n:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        memmove(o, v, <size_t>(sizeof(int32_t) * k))
+                return
+
+            # detect 128-bit alignment
+            elif (values.strides[0] % 16 == 0 and
+                  out.strides[0] % 16 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 16 == 0):
+                for i from 0 <= i < n:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                return
+
+            # detect 64-bit alignment and at least 32 bytes
+            elif (sizeof(int32_t) * k >= 32 and
+                  values.strides[0] % 8 == 0 and
+                  out.strides[0] % 8 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 8 == 0):
+                # split cases by parity to help out the branch predictor
+                for i from 0 <= i < n by 2:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    elif idx % 2 == 0:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                for i from 1 <= i < n by 2:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    elif idx % 2 == 0:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                return
+
 
     for i from 0 <= i < n:
         idx = indexer[i]
@@ -2771,19 +3011,79 @@ def take_2d_axis0_int8_int64(ndarray[int8_t, ndim=2] values,
             int64_t *v, *o
 
         if (values.strides[1] == out.strides[1] and
-            values.strides[1] == sizeof(int64_t) and
-            sizeof(int64_t) * n >= 256):
+            values.strides[1] == sizeof(int64_t)):
 
-            for i from 0 <= i < n:
-                idx = indexer[i]
-                if idx == -1:
-                    for j from 0 <= j < k:
-                        out[i, j] = fv
-                else:
-                    v = &values[idx, 0]
-                    o = &out[i, 0]
-                    memmove(o, v, <size_t>(sizeof(int64_t) * k))
-            return
+            # GH3130
+            if sizeof(int64_t) * k >= 256:
+                for i from 0 <= i < n:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        memmove(o, v, <size_t>(sizeof(int64_t) * k))
+                return
+
+            # detect 128-bit alignment
+            elif (values.strides[0] % 16 == 0 and
+                  out.strides[0] % 16 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 16 == 0):
+                for i from 0 <= i < n:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                return
+
+            # detect 64-bit alignment and at least 32 bytes
+            elif (sizeof(int64_t) * k >= 32 and
+                  values.strides[0] % 8 == 0 and
+                  out.strides[0] % 8 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 8 == 0):
+                # split cases by parity to help out the branch predictor
+                for i from 0 <= i < n by 2:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    elif idx % 2 == 0:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                for i from 1 <= i < n by 2:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    elif idx % 2 == 0:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                return
+
 
     for i from 0 <= i < n:
         idx = indexer[i]
@@ -2814,19 +3114,79 @@ def take_2d_axis0_int8_float64(ndarray[int8_t, ndim=2] values,
             float64_t *v, *o
 
         if (values.strides[1] == out.strides[1] and
-            values.strides[1] == sizeof(float64_t) and
-            sizeof(float64_t) * n >= 256):
+            values.strides[1] == sizeof(float64_t)):
 
-            for i from 0 <= i < n:
-                idx = indexer[i]
-                if idx == -1:
-                    for j from 0 <= j < k:
-                        out[i, j] = fv
-                else:
-                    v = &values[idx, 0]
-                    o = &out[i, 0]
-                    memmove(o, v, <size_t>(sizeof(float64_t) * k))
-            return
+            # GH3130
+            if sizeof(float64_t) * k >= 256:
+                for i from 0 <= i < n:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        memmove(o, v, <size_t>(sizeof(float64_t) * k))
+                return
+
+            # detect 128-bit alignment
+            elif (values.strides[0] % 16 == 0 and
+                  out.strides[0] % 16 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 16 == 0):
+                for i from 0 <= i < n:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                return
+
+            # detect 64-bit alignment and at least 32 bytes
+            elif (sizeof(float64_t) * k >= 32 and
+                  values.strides[0] % 8 == 0 and
+                  out.strides[0] % 8 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 8 == 0):
+                # split cases by parity to help out the branch predictor
+                for i from 0 <= i < n by 2:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    elif idx % 2 == 0:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                for i from 1 <= i < n by 2:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    elif idx % 2 == 0:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                return
+
 
     for i from 0 <= i < n:
         idx = indexer[i]
@@ -2857,19 +3217,79 @@ def take_2d_axis0_int16_int16(ndarray[int16_t, ndim=2] values,
             int16_t *v, *o
 
         if (values.strides[1] == out.strides[1] and
-            values.strides[1] == sizeof(int16_t) and
-            sizeof(int16_t) * n >= 256):
+            values.strides[1] == sizeof(int16_t)):
 
-            for i from 0 <= i < n:
-                idx = indexer[i]
-                if idx == -1:
-                    for j from 0 <= j < k:
-                        out[i, j] = fv
-                else:
-                    v = &values[idx, 0]
-                    o = &out[i, 0]
-                    memmove(o, v, <size_t>(sizeof(int16_t) * k))
-            return
+            # GH3130
+            if sizeof(int16_t) * k >= 256:
+                for i from 0 <= i < n:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        memmove(o, v, <size_t>(sizeof(int16_t) * k))
+                return
+
+            # detect 128-bit alignment
+            elif (values.strides[0] % 16 == 0 and
+                  out.strides[0] % 16 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 16 == 0):
+                for i from 0 <= i < n:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                return
+
+            # detect 64-bit alignment and at least 32 bytes
+            elif (sizeof(int16_t) * k >= 32 and
+                  values.strides[0] % 8 == 0 and
+                  out.strides[0] % 8 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 8 == 0):
+                # split cases by parity to help out the branch predictor
+                for i from 0 <= i < n by 2:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    elif idx % 2 == 0:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                for i from 1 <= i < n by 2:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    elif idx % 2 == 0:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                return
+
 
     for i from 0 <= i < n:
         idx = indexer[i]
@@ -2900,19 +3320,79 @@ def take_2d_axis0_int16_int32(ndarray[int16_t, ndim=2] values,
             int32_t *v, *o
 
         if (values.strides[1] == out.strides[1] and
-            values.strides[1] == sizeof(int32_t) and
-            sizeof(int32_t) * n >= 256):
+            values.strides[1] == sizeof(int32_t)):
 
-            for i from 0 <= i < n:
-                idx = indexer[i]
-                if idx == -1:
-                    for j from 0 <= j < k:
-                        out[i, j] = fv
-                else:
-                    v = &values[idx, 0]
-                    o = &out[i, 0]
-                    memmove(o, v, <size_t>(sizeof(int32_t) * k))
-            return
+            # GH3130
+            if sizeof(int32_t) * k >= 256:
+                for i from 0 <= i < n:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        memmove(o, v, <size_t>(sizeof(int32_t) * k))
+                return
+
+            # detect 128-bit alignment
+            elif (values.strides[0] % 16 == 0 and
+                  out.strides[0] % 16 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 16 == 0):
+                for i from 0 <= i < n:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                return
+
+            # detect 64-bit alignment and at least 32 bytes
+            elif (sizeof(int32_t) * k >= 32 and
+                  values.strides[0] % 8 == 0 and
+                  out.strides[0] % 8 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 8 == 0):
+                # split cases by parity to help out the branch predictor
+                for i from 0 <= i < n by 2:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    elif idx % 2 == 0:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                for i from 1 <= i < n by 2:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    elif idx % 2 == 0:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                return
+
 
     for i from 0 <= i < n:
         idx = indexer[i]
@@ -2943,19 +3423,79 @@ def take_2d_axis0_int16_int64(ndarray[int16_t, ndim=2] values,
             int64_t *v, *o
 
         if (values.strides[1] == out.strides[1] and
-            values.strides[1] == sizeof(int64_t) and
-            sizeof(int64_t) * n >= 256):
+            values.strides[1] == sizeof(int64_t)):
 
-            for i from 0 <= i < n:
-                idx = indexer[i]
-                if idx == -1:
-                    for j from 0 <= j < k:
-                        out[i, j] = fv
-                else:
-                    v = &values[idx, 0]
-                    o = &out[i, 0]
-                    memmove(o, v, <size_t>(sizeof(int64_t) * k))
-            return
+            # GH3130
+            if sizeof(int64_t) * k >= 256:
+                for i from 0 <= i < n:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        memmove(o, v, <size_t>(sizeof(int64_t) * k))
+                return
+
+            # detect 128-bit alignment
+            elif (values.strides[0] % 16 == 0 and
+                  out.strides[0] % 16 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 16 == 0):
+                for i from 0 <= i < n:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                return
+
+            # detect 64-bit alignment and at least 32 bytes
+            elif (sizeof(int64_t) * k >= 32 and
+                  values.strides[0] % 8 == 0 and
+                  out.strides[0] % 8 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 8 == 0):
+                # split cases by parity to help out the branch predictor
+                for i from 0 <= i < n by 2:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    elif idx % 2 == 0:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                for i from 1 <= i < n by 2:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    elif idx % 2 == 0:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                return
+
 
     for i from 0 <= i < n:
         idx = indexer[i]
@@ -2986,19 +3526,79 @@ def take_2d_axis0_int16_float64(ndarray[int16_t, ndim=2] values,
             float64_t *v, *o
 
         if (values.strides[1] == out.strides[1] and
-            values.strides[1] == sizeof(float64_t) and
-            sizeof(float64_t) * n >= 256):
+            values.strides[1] == sizeof(float64_t)):
 
-            for i from 0 <= i < n:
-                idx = indexer[i]
-                if idx == -1:
-                    for j from 0 <= j < k:
-                        out[i, j] = fv
-                else:
-                    v = &values[idx, 0]
-                    o = &out[i, 0]
-                    memmove(o, v, <size_t>(sizeof(float64_t) * k))
-            return
+            # GH3130
+            if sizeof(float64_t) * k >= 256:
+                for i from 0 <= i < n:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        memmove(o, v, <size_t>(sizeof(float64_t) * k))
+                return
+
+            # detect 128-bit alignment
+            elif (values.strides[0] % 16 == 0 and
+                  out.strides[0] % 16 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 16 == 0):
+                for i from 0 <= i < n:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                return
+
+            # detect 64-bit alignment and at least 32 bytes
+            elif (sizeof(float64_t) * k >= 32 and
+                  values.strides[0] % 8 == 0 and
+                  out.strides[0] % 8 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 8 == 0):
+                # split cases by parity to help out the branch predictor
+                for i from 0 <= i < n by 2:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    elif idx % 2 == 0:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                for i from 1 <= i < n by 2:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    elif idx % 2 == 0:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                return
+
 
     for i from 0 <= i < n:
         idx = indexer[i]
@@ -3029,19 +3629,79 @@ def take_2d_axis0_int32_int32(ndarray[int32_t, ndim=2] values,
             int32_t *v, *o
 
         if (values.strides[1] == out.strides[1] and
-            values.strides[1] == sizeof(int32_t) and
-            sizeof(int32_t) * n >= 256):
+            values.strides[1] == sizeof(int32_t)):
 
-            for i from 0 <= i < n:
-                idx = indexer[i]
-                if idx == -1:
-                    for j from 0 <= j < k:
-                        out[i, j] = fv
-                else:
-                    v = &values[idx, 0]
-                    o = &out[i, 0]
-                    memmove(o, v, <size_t>(sizeof(int32_t) * k))
-            return
+            # GH3130
+            if sizeof(int32_t) * k >= 256:
+                for i from 0 <= i < n:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        memmove(o, v, <size_t>(sizeof(int32_t) * k))
+                return
+
+            # detect 128-bit alignment
+            elif (values.strides[0] % 16 == 0 and
+                  out.strides[0] % 16 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 16 == 0):
+                for i from 0 <= i < n:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                return
+
+            # detect 64-bit alignment and at least 32 bytes
+            elif (sizeof(int32_t) * k >= 32 and
+                  values.strides[0] % 8 == 0 and
+                  out.strides[0] % 8 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 8 == 0):
+                # split cases by parity to help out the branch predictor
+                for i from 0 <= i < n by 2:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    elif idx % 2 == 0:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                for i from 1 <= i < n by 2:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    elif idx % 2 == 0:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                return
+
 
     for i from 0 <= i < n:
         idx = indexer[i]
@@ -3072,19 +3732,79 @@ def take_2d_axis0_int32_int64(ndarray[int32_t, ndim=2] values,
             int64_t *v, *o
 
         if (values.strides[1] == out.strides[1] and
-            values.strides[1] == sizeof(int64_t) and
-            sizeof(int64_t) * n >= 256):
+            values.strides[1] == sizeof(int64_t)):
 
-            for i from 0 <= i < n:
-                idx = indexer[i]
-                if idx == -1:
-                    for j from 0 <= j < k:
-                        out[i, j] = fv
-                else:
-                    v = &values[idx, 0]
-                    o = &out[i, 0]
-                    memmove(o, v, <size_t>(sizeof(int64_t) * k))
-            return
+            # GH3130
+            if sizeof(int64_t) * k >= 256:
+                for i from 0 <= i < n:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        memmove(o, v, <size_t>(sizeof(int64_t) * k))
+                return
+
+            # detect 128-bit alignment
+            elif (values.strides[0] % 16 == 0 and
+                  out.strides[0] % 16 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 16 == 0):
+                for i from 0 <= i < n:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                return
+
+            # detect 64-bit alignment and at least 32 bytes
+            elif (sizeof(int64_t) * k >= 32 and
+                  values.strides[0] % 8 == 0 and
+                  out.strides[0] % 8 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 8 == 0):
+                # split cases by parity to help out the branch predictor
+                for i from 0 <= i < n by 2:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    elif idx % 2 == 0:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                for i from 1 <= i < n by 2:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    elif idx % 2 == 0:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                return
+
 
     for i from 0 <= i < n:
         idx = indexer[i]
@@ -3115,19 +3835,79 @@ def take_2d_axis0_int32_float64(ndarray[int32_t, ndim=2] values,
             float64_t *v, *o
 
         if (values.strides[1] == out.strides[1] and
-            values.strides[1] == sizeof(float64_t) and
-            sizeof(float64_t) * n >= 256):
+            values.strides[1] == sizeof(float64_t)):
 
-            for i from 0 <= i < n:
-                idx = indexer[i]
-                if idx == -1:
-                    for j from 0 <= j < k:
-                        out[i, j] = fv
-                else:
-                    v = &values[idx, 0]
-                    o = &out[i, 0]
-                    memmove(o, v, <size_t>(sizeof(float64_t) * k))
-            return
+            # GH3130
+            if sizeof(float64_t) * k >= 256:
+                for i from 0 <= i < n:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        memmove(o, v, <size_t>(sizeof(float64_t) * k))
+                return
+
+            # detect 128-bit alignment
+            elif (values.strides[0] % 16 == 0 and
+                  out.strides[0] % 16 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 16 == 0):
+                for i from 0 <= i < n:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                return
+
+            # detect 64-bit alignment and at least 32 bytes
+            elif (sizeof(float64_t) * k >= 32 and
+                  values.strides[0] % 8 == 0 and
+                  out.strides[0] % 8 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 8 == 0):
+                # split cases by parity to help out the branch predictor
+                for i from 0 <= i < n by 2:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    elif idx % 2 == 0:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                for i from 1 <= i < n by 2:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    elif idx % 2 == 0:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                return
+
 
     for i from 0 <= i < n:
         idx = indexer[i]
@@ -3158,19 +3938,79 @@ def take_2d_axis0_int64_int64(ndarray[int64_t, ndim=2] values,
             int64_t *v, *o
 
         if (values.strides[1] == out.strides[1] and
-            values.strides[1] == sizeof(int64_t) and
-            sizeof(int64_t) * n >= 256):
+            values.strides[1] == sizeof(int64_t)):
 
-            for i from 0 <= i < n:
-                idx = indexer[i]
-                if idx == -1:
-                    for j from 0 <= j < k:
-                        out[i, j] = fv
-                else:
-                    v = &values[idx, 0]
-                    o = &out[i, 0]
-                    memmove(o, v, <size_t>(sizeof(int64_t) * k))
-            return
+            # GH3130
+            if sizeof(int64_t) * k >= 256:
+                for i from 0 <= i < n:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        memmove(o, v, <size_t>(sizeof(int64_t) * k))
+                return
+
+            # detect 128-bit alignment
+            elif (values.strides[0] % 16 == 0 and
+                  out.strides[0] % 16 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 16 == 0):
+                for i from 0 <= i < n:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                return
+
+            # detect 64-bit alignment and at least 32 bytes
+            elif (sizeof(int64_t) * k >= 32 and
+                  values.strides[0] % 8 == 0 and
+                  out.strides[0] % 8 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 8 == 0):
+                # split cases by parity to help out the branch predictor
+                for i from 0 <= i < n by 2:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    elif idx % 2 == 0:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                for i from 1 <= i < n by 2:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    elif idx % 2 == 0:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                return
+
 
     for i from 0 <= i < n:
         idx = indexer[i]
@@ -3201,19 +4041,79 @@ def take_2d_axis0_int64_float64(ndarray[int64_t, ndim=2] values,
             float64_t *v, *o
 
         if (values.strides[1] == out.strides[1] and
-            values.strides[1] == sizeof(float64_t) and
-            sizeof(float64_t) * n >= 256):
+            values.strides[1] == sizeof(float64_t)):
 
-            for i from 0 <= i < n:
-                idx = indexer[i]
-                if idx == -1:
-                    for j from 0 <= j < k:
-                        out[i, j] = fv
-                else:
-                    v = &values[idx, 0]
-                    o = &out[i, 0]
-                    memmove(o, v, <size_t>(sizeof(float64_t) * k))
-            return
+            # GH3130
+            if sizeof(float64_t) * k >= 256:
+                for i from 0 <= i < n:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        memmove(o, v, <size_t>(sizeof(float64_t) * k))
+                return
+
+            # detect 128-bit alignment
+            elif (values.strides[0] % 16 == 0 and
+                  out.strides[0] % 16 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 16 == 0):
+                for i from 0 <= i < n:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                return
+
+            # detect 64-bit alignment and at least 32 bytes
+            elif (sizeof(float64_t) * k >= 32 and
+                  values.strides[0] % 8 == 0 and
+                  out.strides[0] % 8 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 8 == 0):
+                # split cases by parity to help out the branch predictor
+                for i from 0 <= i < n by 2:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    elif idx % 2 == 0:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                for i from 1 <= i < n by 2:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    elif idx % 2 == 0:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                return
+
 
     for i from 0 <= i < n:
         idx = indexer[i]
@@ -3244,19 +4144,79 @@ def take_2d_axis0_float32_float32(ndarray[float32_t, ndim=2] values,
             float32_t *v, *o
 
         if (values.strides[1] == out.strides[1] and
-            values.strides[1] == sizeof(float32_t) and
-            sizeof(float32_t) * n >= 256):
+            values.strides[1] == sizeof(float32_t)):
 
-            for i from 0 <= i < n:
-                idx = indexer[i]
-                if idx == -1:
-                    for j from 0 <= j < k:
-                        out[i, j] = fv
-                else:
-                    v = &values[idx, 0]
-                    o = &out[i, 0]
-                    memmove(o, v, <size_t>(sizeof(float32_t) * k))
-            return
+            # GH3130
+            if sizeof(float32_t) * k >= 256:
+                for i from 0 <= i < n:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        memmove(o, v, <size_t>(sizeof(float32_t) * k))
+                return
+
+            # detect 128-bit alignment
+            elif (values.strides[0] % 16 == 0 and
+                  out.strides[0] % 16 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 16 == 0):
+                for i from 0 <= i < n:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                return
+
+            # detect 64-bit alignment and at least 32 bytes
+            elif (sizeof(float32_t) * k >= 32 and
+                  values.strides[0] % 8 == 0 and
+                  out.strides[0] % 8 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 8 == 0):
+                # split cases by parity to help out the branch predictor
+                for i from 0 <= i < n by 2:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    elif idx % 2 == 0:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                for i from 1 <= i < n by 2:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    elif idx % 2 == 0:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                return
+
 
     for i from 0 <= i < n:
         idx = indexer[i]
@@ -3287,19 +4247,79 @@ def take_2d_axis0_float32_float64(ndarray[float32_t, ndim=2] values,
             float64_t *v, *o
 
         if (values.strides[1] == out.strides[1] and
-            values.strides[1] == sizeof(float64_t) and
-            sizeof(float64_t) * n >= 256):
+            values.strides[1] == sizeof(float64_t)):
 
-            for i from 0 <= i < n:
-                idx = indexer[i]
-                if idx == -1:
-                    for j from 0 <= j < k:
-                        out[i, j] = fv
-                else:
-                    v = &values[idx, 0]
-                    o = &out[i, 0]
-                    memmove(o, v, <size_t>(sizeof(float64_t) * k))
-            return
+            # GH3130
+            if sizeof(float64_t) * k >= 256:
+                for i from 0 <= i < n:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        memmove(o, v, <size_t>(sizeof(float64_t) * k))
+                return
+
+            # detect 128-bit alignment
+            elif (values.strides[0] % 16 == 0 and
+                  out.strides[0] % 16 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 16 == 0):
+                for i from 0 <= i < n:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                return
+
+            # detect 64-bit alignment and at least 32 bytes
+            elif (sizeof(float64_t) * k >= 32 and
+                  values.strides[0] % 8 == 0 and
+                  out.strides[0] % 8 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 8 == 0):
+                # split cases by parity to help out the branch predictor
+                for i from 0 <= i < n by 2:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    elif idx % 2 == 0:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                for i from 1 <= i < n by 2:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    elif idx % 2 == 0:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                return
+
 
     for i from 0 <= i < n:
         idx = indexer[i]
@@ -3330,19 +4350,79 @@ def take_2d_axis0_float64_float64(ndarray[float64_t, ndim=2] values,
             float64_t *v, *o
 
         if (values.strides[1] == out.strides[1] and
-            values.strides[1] == sizeof(float64_t) and
-            sizeof(float64_t) * n >= 256):
+            values.strides[1] == sizeof(float64_t)):
 
-            for i from 0 <= i < n:
-                idx = indexer[i]
-                if idx == -1:
-                    for j from 0 <= j < k:
-                        out[i, j] = fv
-                else:
-                    v = &values[idx, 0]
-                    o = &out[i, 0]
-                    memmove(o, v, <size_t>(sizeof(float64_t) * k))
-            return
+            # GH3130
+            if sizeof(float64_t) * k >= 256:
+                for i from 0 <= i < n:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        memmove(o, v, <size_t>(sizeof(float64_t) * k))
+                return
+
+            # detect 128-bit alignment
+            elif (values.strides[0] % 16 == 0 and
+                  out.strides[0] % 16 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 16 == 0):
+                for i from 0 <= i < n:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                return
+
+            # detect 64-bit alignment and at least 32 bytes
+            elif (sizeof(float64_t) * k >= 32 and
+                  values.strides[0] % 8 == 0 and
+                  out.strides[0] % 8 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 8 == 0):
+                # split cases by parity to help out the branch predictor
+                for i from 0 <= i < n by 2:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    elif idx % 2 == 0:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                for i from 1 <= i < n by 2:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    elif idx % 2 == 0:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                return
+
 
     for i from 0 <= i < n:
         idx = indexer[i]
@@ -3373,19 +4453,79 @@ def take_2d_axis0_object_object(ndarray[object, ndim=2] values,
             object *v, *o
 
         if (values.strides[1] == out.strides[1] and
-            values.strides[1] == sizeof(object) and
-            sizeof(object) * n >= 256):
+            values.strides[1] == sizeof(object)):
 
-            for i from 0 <= i < n:
-                idx = indexer[i]
-                if idx == -1:
-                    for j from 0 <= j < k:
-                        out[i, j] = fv
-                else:
-                    v = &values[idx, 0]
-                    o = &out[i, 0]
-                    memmove(o, v, <size_t>(sizeof(object) * k))
-            return
+            # GH3130
+            if sizeof(object) * k >= 256:
+                for i from 0 <= i < n:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        memmove(o, v, <size_t>(sizeof(object) * k))
+                return
+
+            # detect 128-bit alignment
+            elif (values.strides[0] % 16 == 0 and
+                  out.strides[0] % 16 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 16 == 0):
+                for i from 0 <= i < n:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                return
+
+            # detect 64-bit alignment and at least 32 bytes
+            elif (sizeof(object) * k >= 32 and
+                  values.strides[0] % 8 == 0 and
+                  out.strides[0] % 8 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 8 == 0):
+                # split cases by parity to help out the branch predictor
+                for i from 0 <= i < n by 2:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    elif idx % 2 == 0:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                for i from 1 <= i < n by 2:
+                    idx = indexer[i]
+                    if idx == -1:
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = fv
+                    elif idx % 2 == 0:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                    else:
+                        v = &values[idx, 0]
+                        o = &out[i, 0]
+                        for j from 0 <= j < k:
+                            o[j] = v[j]
+                return
+
 
     for i from 0 <= i < n:
         idx = indexer[i]
@@ -3420,19 +4560,78 @@ def take_2d_axis1_bool_bool(ndarray[uint8_t, ndim=2] values,
             uint8_t *v, *o
 
         if (values.strides[0] == out.strides[0] and
-            values.strides[0] == sizeof(uint8_t) and
-            sizeof(uint8_t) * n >= 256):
+            values.strides[0] == sizeof(uint8_t)):
+            
+            # GH3130
+            if sizeof(uint8_t) * n >= 256:
+                for j from 0 <= j < k:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        memmove(o, v, <size_t>(sizeof(uint8_t) * n))
+                return
 
-            for j from 0 <= j < k:
-                idx = indexer[j]
-                if idx == -1:
-                    for i from 0 <= i < n:
-                        out[i, j] = fv
-                else:
-                    v = &values[0, idx]
-                    o = &out[0, j]
-                    memmove(o, v, <size_t>(sizeof(uint8_t) * n))
-            return
+            # detect 128-bit alignment
+            elif (values.strides[1] % 16 == 0 and
+                  out.strides[1] % 16 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 16 == 0):
+                for j from 0 <= j < k:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                return
+
+            # detect 64-bit alignment and at least 32 bytes
+            elif (sizeof(uint8_t) * n >= 32 and
+                  values.strides[1] % 8 == 0 and
+                  out.strides[1] % 8 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 8 == 0):
+                # split cases by parity to help out the branch predictor
+                for j from 0 <= j < k by 2:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    elif idx % 2 == 0:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                for j from 1 <= j < k by 2:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    elif idx % 2 == 0:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                return
 
     for j from 0 <= j < k:
         idx = indexer[j]
@@ -3466,19 +4665,78 @@ def take_2d_axis1_bool_object(ndarray[uint8_t, ndim=2] values,
             object *v, *o
 
         if (values.strides[0] == out.strides[0] and
-            values.strides[0] == sizeof(object) and
-            sizeof(object) * n >= 256):
+            values.strides[0] == sizeof(object)):
+            
+            # GH3130
+            if sizeof(object) * n >= 256:
+                for j from 0 <= j < k:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        memmove(o, v, <size_t>(sizeof(object) * n))
+                return
 
-            for j from 0 <= j < k:
-                idx = indexer[j]
-                if idx == -1:
-                    for i from 0 <= i < n:
-                        out[i, j] = fv
-                else:
-                    v = &values[0, idx]
-                    o = &out[0, j]
-                    memmove(o, v, <size_t>(sizeof(object) * n))
-            return
+            # detect 128-bit alignment
+            elif (values.strides[1] % 16 == 0 and
+                  out.strides[1] % 16 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 16 == 0):
+                for j from 0 <= j < k:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                return
+
+            # detect 64-bit alignment and at least 32 bytes
+            elif (sizeof(object) * n >= 32 and
+                  values.strides[1] % 8 == 0 and
+                  out.strides[1] % 8 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 8 == 0):
+                # split cases by parity to help out the branch predictor
+                for j from 0 <= j < k by 2:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    elif idx % 2 == 0:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                for j from 1 <= j < k by 2:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    elif idx % 2 == 0:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                return
 
     for j from 0 <= j < k:
         idx = indexer[j]
@@ -3512,19 +4770,78 @@ def take_2d_axis1_int8_int8(ndarray[int8_t, ndim=2] values,
             int8_t *v, *o
 
         if (values.strides[0] == out.strides[0] and
-            values.strides[0] == sizeof(int8_t) and
-            sizeof(int8_t) * n >= 256):
+            values.strides[0] == sizeof(int8_t)):
+            
+            # GH3130
+            if sizeof(int8_t) * n >= 256:
+                for j from 0 <= j < k:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        memmove(o, v, <size_t>(sizeof(int8_t) * n))
+                return
 
-            for j from 0 <= j < k:
-                idx = indexer[j]
-                if idx == -1:
-                    for i from 0 <= i < n:
-                        out[i, j] = fv
-                else:
-                    v = &values[0, idx]
-                    o = &out[0, j]
-                    memmove(o, v, <size_t>(sizeof(int8_t) * n))
-            return
+            # detect 128-bit alignment
+            elif (values.strides[1] % 16 == 0 and
+                  out.strides[1] % 16 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 16 == 0):
+                for j from 0 <= j < k:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                return
+
+            # detect 64-bit alignment and at least 32 bytes
+            elif (sizeof(int8_t) * n >= 32 and
+                  values.strides[1] % 8 == 0 and
+                  out.strides[1] % 8 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 8 == 0):
+                # split cases by parity to help out the branch predictor
+                for j from 0 <= j < k by 2:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    elif idx % 2 == 0:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                for j from 1 <= j < k by 2:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    elif idx % 2 == 0:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                return
 
     for j from 0 <= j < k:
         idx = indexer[j]
@@ -3558,19 +4875,78 @@ def take_2d_axis1_int8_int32(ndarray[int8_t, ndim=2] values,
             int32_t *v, *o
 
         if (values.strides[0] == out.strides[0] and
-            values.strides[0] == sizeof(int32_t) and
-            sizeof(int32_t) * n >= 256):
+            values.strides[0] == sizeof(int32_t)):
+            
+            # GH3130
+            if sizeof(int32_t) * n >= 256:
+                for j from 0 <= j < k:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        memmove(o, v, <size_t>(sizeof(int32_t) * n))
+                return
 
-            for j from 0 <= j < k:
-                idx = indexer[j]
-                if idx == -1:
-                    for i from 0 <= i < n:
-                        out[i, j] = fv
-                else:
-                    v = &values[0, idx]
-                    o = &out[0, j]
-                    memmove(o, v, <size_t>(sizeof(int32_t) * n))
-            return
+            # detect 128-bit alignment
+            elif (values.strides[1] % 16 == 0 and
+                  out.strides[1] % 16 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 16 == 0):
+                for j from 0 <= j < k:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                return
+
+            # detect 64-bit alignment and at least 32 bytes
+            elif (sizeof(int32_t) * n >= 32 and
+                  values.strides[1] % 8 == 0 and
+                  out.strides[1] % 8 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 8 == 0):
+                # split cases by parity to help out the branch predictor
+                for j from 0 <= j < k by 2:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    elif idx % 2 == 0:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                for j from 1 <= j < k by 2:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    elif idx % 2 == 0:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                return
 
     for j from 0 <= j < k:
         idx = indexer[j]
@@ -3604,19 +4980,78 @@ def take_2d_axis1_int8_int64(ndarray[int8_t, ndim=2] values,
             int64_t *v, *o
 
         if (values.strides[0] == out.strides[0] and
-            values.strides[0] == sizeof(int64_t) and
-            sizeof(int64_t) * n >= 256):
+            values.strides[0] == sizeof(int64_t)):
+            
+            # GH3130
+            if sizeof(int64_t) * n >= 256:
+                for j from 0 <= j < k:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        memmove(o, v, <size_t>(sizeof(int64_t) * n))
+                return
 
-            for j from 0 <= j < k:
-                idx = indexer[j]
-                if idx == -1:
-                    for i from 0 <= i < n:
-                        out[i, j] = fv
-                else:
-                    v = &values[0, idx]
-                    o = &out[0, j]
-                    memmove(o, v, <size_t>(sizeof(int64_t) * n))
-            return
+            # detect 128-bit alignment
+            elif (values.strides[1] % 16 == 0 and
+                  out.strides[1] % 16 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 16 == 0):
+                for j from 0 <= j < k:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                return
+
+            # detect 64-bit alignment and at least 32 bytes
+            elif (sizeof(int64_t) * n >= 32 and
+                  values.strides[1] % 8 == 0 and
+                  out.strides[1] % 8 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 8 == 0):
+                # split cases by parity to help out the branch predictor
+                for j from 0 <= j < k by 2:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    elif idx % 2 == 0:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                for j from 1 <= j < k by 2:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    elif idx % 2 == 0:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                return
 
     for j from 0 <= j < k:
         idx = indexer[j]
@@ -3650,19 +5085,78 @@ def take_2d_axis1_int8_float64(ndarray[int8_t, ndim=2] values,
             float64_t *v, *o
 
         if (values.strides[0] == out.strides[0] and
-            values.strides[0] == sizeof(float64_t) and
-            sizeof(float64_t) * n >= 256):
+            values.strides[0] == sizeof(float64_t)):
+            
+            # GH3130
+            if sizeof(float64_t) * n >= 256:
+                for j from 0 <= j < k:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        memmove(o, v, <size_t>(sizeof(float64_t) * n))
+                return
 
-            for j from 0 <= j < k:
-                idx = indexer[j]
-                if idx == -1:
-                    for i from 0 <= i < n:
-                        out[i, j] = fv
-                else:
-                    v = &values[0, idx]
-                    o = &out[0, j]
-                    memmove(o, v, <size_t>(sizeof(float64_t) * n))
-            return
+            # detect 128-bit alignment
+            elif (values.strides[1] % 16 == 0 and
+                  out.strides[1] % 16 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 16 == 0):
+                for j from 0 <= j < k:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                return
+
+            # detect 64-bit alignment and at least 32 bytes
+            elif (sizeof(float64_t) * n >= 32 and
+                  values.strides[1] % 8 == 0 and
+                  out.strides[1] % 8 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 8 == 0):
+                # split cases by parity to help out the branch predictor
+                for j from 0 <= j < k by 2:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    elif idx % 2 == 0:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                for j from 1 <= j < k by 2:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    elif idx % 2 == 0:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                return
 
     for j from 0 <= j < k:
         idx = indexer[j]
@@ -3696,19 +5190,78 @@ def take_2d_axis1_int16_int16(ndarray[int16_t, ndim=2] values,
             int16_t *v, *o
 
         if (values.strides[0] == out.strides[0] and
-            values.strides[0] == sizeof(int16_t) and
-            sizeof(int16_t) * n >= 256):
+            values.strides[0] == sizeof(int16_t)):
+            
+            # GH3130
+            if sizeof(int16_t) * n >= 256:
+                for j from 0 <= j < k:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        memmove(o, v, <size_t>(sizeof(int16_t) * n))
+                return
 
-            for j from 0 <= j < k:
-                idx = indexer[j]
-                if idx == -1:
-                    for i from 0 <= i < n:
-                        out[i, j] = fv
-                else:
-                    v = &values[0, idx]
-                    o = &out[0, j]
-                    memmove(o, v, <size_t>(sizeof(int16_t) * n))
-            return
+            # detect 128-bit alignment
+            elif (values.strides[1] % 16 == 0 and
+                  out.strides[1] % 16 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 16 == 0):
+                for j from 0 <= j < k:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                return
+
+            # detect 64-bit alignment and at least 32 bytes
+            elif (sizeof(int16_t) * n >= 32 and
+                  values.strides[1] % 8 == 0 and
+                  out.strides[1] % 8 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 8 == 0):
+                # split cases by parity to help out the branch predictor
+                for j from 0 <= j < k by 2:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    elif idx % 2 == 0:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                for j from 1 <= j < k by 2:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    elif idx % 2 == 0:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                return
 
     for j from 0 <= j < k:
         idx = indexer[j]
@@ -3742,19 +5295,78 @@ def take_2d_axis1_int16_int32(ndarray[int16_t, ndim=2] values,
             int32_t *v, *o
 
         if (values.strides[0] == out.strides[0] and
-            values.strides[0] == sizeof(int32_t) and
-            sizeof(int32_t) * n >= 256):
+            values.strides[0] == sizeof(int32_t)):
+            
+            # GH3130
+            if sizeof(int32_t) * n >= 256:
+                for j from 0 <= j < k:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        memmove(o, v, <size_t>(sizeof(int32_t) * n))
+                return
 
-            for j from 0 <= j < k:
-                idx = indexer[j]
-                if idx == -1:
-                    for i from 0 <= i < n:
-                        out[i, j] = fv
-                else:
-                    v = &values[0, idx]
-                    o = &out[0, j]
-                    memmove(o, v, <size_t>(sizeof(int32_t) * n))
-            return
+            # detect 128-bit alignment
+            elif (values.strides[1] % 16 == 0 and
+                  out.strides[1] % 16 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 16 == 0):
+                for j from 0 <= j < k:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                return
+
+            # detect 64-bit alignment and at least 32 bytes
+            elif (sizeof(int32_t) * n >= 32 and
+                  values.strides[1] % 8 == 0 and
+                  out.strides[1] % 8 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 8 == 0):
+                # split cases by parity to help out the branch predictor
+                for j from 0 <= j < k by 2:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    elif idx % 2 == 0:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                for j from 1 <= j < k by 2:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    elif idx % 2 == 0:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                return
 
     for j from 0 <= j < k:
         idx = indexer[j]
@@ -3788,19 +5400,78 @@ def take_2d_axis1_int16_int64(ndarray[int16_t, ndim=2] values,
             int64_t *v, *o
 
         if (values.strides[0] == out.strides[0] and
-            values.strides[0] == sizeof(int64_t) and
-            sizeof(int64_t) * n >= 256):
+            values.strides[0] == sizeof(int64_t)):
+            
+            # GH3130
+            if sizeof(int64_t) * n >= 256:
+                for j from 0 <= j < k:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        memmove(o, v, <size_t>(sizeof(int64_t) * n))
+                return
 
-            for j from 0 <= j < k:
-                idx = indexer[j]
-                if idx == -1:
-                    for i from 0 <= i < n:
-                        out[i, j] = fv
-                else:
-                    v = &values[0, idx]
-                    o = &out[0, j]
-                    memmove(o, v, <size_t>(sizeof(int64_t) * n))
-            return
+            # detect 128-bit alignment
+            elif (values.strides[1] % 16 == 0 and
+                  out.strides[1] % 16 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 16 == 0):
+                for j from 0 <= j < k:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                return
+
+            # detect 64-bit alignment and at least 32 bytes
+            elif (sizeof(int64_t) * n >= 32 and
+                  values.strides[1] % 8 == 0 and
+                  out.strides[1] % 8 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 8 == 0):
+                # split cases by parity to help out the branch predictor
+                for j from 0 <= j < k by 2:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    elif idx % 2 == 0:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                for j from 1 <= j < k by 2:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    elif idx % 2 == 0:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                return
 
     for j from 0 <= j < k:
         idx = indexer[j]
@@ -3834,19 +5505,78 @@ def take_2d_axis1_int16_float64(ndarray[int16_t, ndim=2] values,
             float64_t *v, *o
 
         if (values.strides[0] == out.strides[0] and
-            values.strides[0] == sizeof(float64_t) and
-            sizeof(float64_t) * n >= 256):
+            values.strides[0] == sizeof(float64_t)):
+            
+            # GH3130
+            if sizeof(float64_t) * n >= 256:
+                for j from 0 <= j < k:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        memmove(o, v, <size_t>(sizeof(float64_t) * n))
+                return
 
-            for j from 0 <= j < k:
-                idx = indexer[j]
-                if idx == -1:
-                    for i from 0 <= i < n:
-                        out[i, j] = fv
-                else:
-                    v = &values[0, idx]
-                    o = &out[0, j]
-                    memmove(o, v, <size_t>(sizeof(float64_t) * n))
-            return
+            # detect 128-bit alignment
+            elif (values.strides[1] % 16 == 0 and
+                  out.strides[1] % 16 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 16 == 0):
+                for j from 0 <= j < k:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                return
+
+            # detect 64-bit alignment and at least 32 bytes
+            elif (sizeof(float64_t) * n >= 32 and
+                  values.strides[1] % 8 == 0 and
+                  out.strides[1] % 8 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 8 == 0):
+                # split cases by parity to help out the branch predictor
+                for j from 0 <= j < k by 2:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    elif idx % 2 == 0:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                for j from 1 <= j < k by 2:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    elif idx % 2 == 0:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                return
 
     for j from 0 <= j < k:
         idx = indexer[j]
@@ -3880,19 +5610,78 @@ def take_2d_axis1_int32_int32(ndarray[int32_t, ndim=2] values,
             int32_t *v, *o
 
         if (values.strides[0] == out.strides[0] and
-            values.strides[0] == sizeof(int32_t) and
-            sizeof(int32_t) * n >= 256):
+            values.strides[0] == sizeof(int32_t)):
+            
+            # GH3130
+            if sizeof(int32_t) * n >= 256:
+                for j from 0 <= j < k:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        memmove(o, v, <size_t>(sizeof(int32_t) * n))
+                return
 
-            for j from 0 <= j < k:
-                idx = indexer[j]
-                if idx == -1:
-                    for i from 0 <= i < n:
-                        out[i, j] = fv
-                else:
-                    v = &values[0, idx]
-                    o = &out[0, j]
-                    memmove(o, v, <size_t>(sizeof(int32_t) * n))
-            return
+            # detect 128-bit alignment
+            elif (values.strides[1] % 16 == 0 and
+                  out.strides[1] % 16 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 16 == 0):
+                for j from 0 <= j < k:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                return
+
+            # detect 64-bit alignment and at least 32 bytes
+            elif (sizeof(int32_t) * n >= 32 and
+                  values.strides[1] % 8 == 0 and
+                  out.strides[1] % 8 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 8 == 0):
+                # split cases by parity to help out the branch predictor
+                for j from 0 <= j < k by 2:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    elif idx % 2 == 0:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                for j from 1 <= j < k by 2:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    elif idx % 2 == 0:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                return
 
     for j from 0 <= j < k:
         idx = indexer[j]
@@ -3926,19 +5715,78 @@ def take_2d_axis1_int32_int64(ndarray[int32_t, ndim=2] values,
             int64_t *v, *o
 
         if (values.strides[0] == out.strides[0] and
-            values.strides[0] == sizeof(int64_t) and
-            sizeof(int64_t) * n >= 256):
+            values.strides[0] == sizeof(int64_t)):
+            
+            # GH3130
+            if sizeof(int64_t) * n >= 256:
+                for j from 0 <= j < k:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        memmove(o, v, <size_t>(sizeof(int64_t) * n))
+                return
 
-            for j from 0 <= j < k:
-                idx = indexer[j]
-                if idx == -1:
-                    for i from 0 <= i < n:
-                        out[i, j] = fv
-                else:
-                    v = &values[0, idx]
-                    o = &out[0, j]
-                    memmove(o, v, <size_t>(sizeof(int64_t) * n))
-            return
+            # detect 128-bit alignment
+            elif (values.strides[1] % 16 == 0 and
+                  out.strides[1] % 16 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 16 == 0):
+                for j from 0 <= j < k:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                return
+
+            # detect 64-bit alignment and at least 32 bytes
+            elif (sizeof(int64_t) * n >= 32 and
+                  values.strides[1] % 8 == 0 and
+                  out.strides[1] % 8 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 8 == 0):
+                # split cases by parity to help out the branch predictor
+                for j from 0 <= j < k by 2:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    elif idx % 2 == 0:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                for j from 1 <= j < k by 2:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    elif idx % 2 == 0:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                return
 
     for j from 0 <= j < k:
         idx = indexer[j]
@@ -3972,19 +5820,78 @@ def take_2d_axis1_int32_float64(ndarray[int32_t, ndim=2] values,
             float64_t *v, *o
 
         if (values.strides[0] == out.strides[0] and
-            values.strides[0] == sizeof(float64_t) and
-            sizeof(float64_t) * n >= 256):
+            values.strides[0] == sizeof(float64_t)):
+            
+            # GH3130
+            if sizeof(float64_t) * n >= 256:
+                for j from 0 <= j < k:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        memmove(o, v, <size_t>(sizeof(float64_t) * n))
+                return
 
-            for j from 0 <= j < k:
-                idx = indexer[j]
-                if idx == -1:
-                    for i from 0 <= i < n:
-                        out[i, j] = fv
-                else:
-                    v = &values[0, idx]
-                    o = &out[0, j]
-                    memmove(o, v, <size_t>(sizeof(float64_t) * n))
-            return
+            # detect 128-bit alignment
+            elif (values.strides[1] % 16 == 0 and
+                  out.strides[1] % 16 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 16 == 0):
+                for j from 0 <= j < k:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                return
+
+            # detect 64-bit alignment and at least 32 bytes
+            elif (sizeof(float64_t) * n >= 32 and
+                  values.strides[1] % 8 == 0 and
+                  out.strides[1] % 8 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 8 == 0):
+                # split cases by parity to help out the branch predictor
+                for j from 0 <= j < k by 2:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    elif idx % 2 == 0:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                for j from 1 <= j < k by 2:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    elif idx % 2 == 0:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                return
 
     for j from 0 <= j < k:
         idx = indexer[j]
@@ -4018,19 +5925,78 @@ def take_2d_axis1_int64_int64(ndarray[int64_t, ndim=2] values,
             int64_t *v, *o
 
         if (values.strides[0] == out.strides[0] and
-            values.strides[0] == sizeof(int64_t) and
-            sizeof(int64_t) * n >= 256):
+            values.strides[0] == sizeof(int64_t)):
+            
+            # GH3130
+            if sizeof(int64_t) * n >= 256:
+                for j from 0 <= j < k:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        memmove(o, v, <size_t>(sizeof(int64_t) * n))
+                return
 
-            for j from 0 <= j < k:
-                idx = indexer[j]
-                if idx == -1:
-                    for i from 0 <= i < n:
-                        out[i, j] = fv
-                else:
-                    v = &values[0, idx]
-                    o = &out[0, j]
-                    memmove(o, v, <size_t>(sizeof(int64_t) * n))
-            return
+            # detect 128-bit alignment
+            elif (values.strides[1] % 16 == 0 and
+                  out.strides[1] % 16 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 16 == 0):
+                for j from 0 <= j < k:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                return
+
+            # detect 64-bit alignment and at least 32 bytes
+            elif (sizeof(int64_t) * n >= 32 and
+                  values.strides[1] % 8 == 0 and
+                  out.strides[1] % 8 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 8 == 0):
+                # split cases by parity to help out the branch predictor
+                for j from 0 <= j < k by 2:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    elif idx % 2 == 0:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                for j from 1 <= j < k by 2:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    elif idx % 2 == 0:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                return
 
     for j from 0 <= j < k:
         idx = indexer[j]
@@ -4064,19 +6030,78 @@ def take_2d_axis1_int64_float64(ndarray[int64_t, ndim=2] values,
             float64_t *v, *o
 
         if (values.strides[0] == out.strides[0] and
-            values.strides[0] == sizeof(float64_t) and
-            sizeof(float64_t) * n >= 256):
+            values.strides[0] == sizeof(float64_t)):
+            
+            # GH3130
+            if sizeof(float64_t) * n >= 256:
+                for j from 0 <= j < k:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        memmove(o, v, <size_t>(sizeof(float64_t) * n))
+                return
 
-            for j from 0 <= j < k:
-                idx = indexer[j]
-                if idx == -1:
-                    for i from 0 <= i < n:
-                        out[i, j] = fv
-                else:
-                    v = &values[0, idx]
-                    o = &out[0, j]
-                    memmove(o, v, <size_t>(sizeof(float64_t) * n))
-            return
+            # detect 128-bit alignment
+            elif (values.strides[1] % 16 == 0 and
+                  out.strides[1] % 16 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 16 == 0):
+                for j from 0 <= j < k:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                return
+
+            # detect 64-bit alignment and at least 32 bytes
+            elif (sizeof(float64_t) * n >= 32 and
+                  values.strides[1] % 8 == 0 and
+                  out.strides[1] % 8 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 8 == 0):
+                # split cases by parity to help out the branch predictor
+                for j from 0 <= j < k by 2:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    elif idx % 2 == 0:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                for j from 1 <= j < k by 2:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    elif idx % 2 == 0:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                return
 
     for j from 0 <= j < k:
         idx = indexer[j]
@@ -4110,19 +6135,78 @@ def take_2d_axis1_float32_float32(ndarray[float32_t, ndim=2] values,
             float32_t *v, *o
 
         if (values.strides[0] == out.strides[0] and
-            values.strides[0] == sizeof(float32_t) and
-            sizeof(float32_t) * n >= 256):
+            values.strides[0] == sizeof(float32_t)):
+            
+            # GH3130
+            if sizeof(float32_t) * n >= 256:
+                for j from 0 <= j < k:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        memmove(o, v, <size_t>(sizeof(float32_t) * n))
+                return
 
-            for j from 0 <= j < k:
-                idx = indexer[j]
-                if idx == -1:
-                    for i from 0 <= i < n:
-                        out[i, j] = fv
-                else:
-                    v = &values[0, idx]
-                    o = &out[0, j]
-                    memmove(o, v, <size_t>(sizeof(float32_t) * n))
-            return
+            # detect 128-bit alignment
+            elif (values.strides[1] % 16 == 0 and
+                  out.strides[1] % 16 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 16 == 0):
+                for j from 0 <= j < k:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                return
+
+            # detect 64-bit alignment and at least 32 bytes
+            elif (sizeof(float32_t) * n >= 32 and
+                  values.strides[1] % 8 == 0 and
+                  out.strides[1] % 8 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 8 == 0):
+                # split cases by parity to help out the branch predictor
+                for j from 0 <= j < k by 2:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    elif idx % 2 == 0:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                for j from 1 <= j < k by 2:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    elif idx % 2 == 0:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                return
 
     for j from 0 <= j < k:
         idx = indexer[j]
@@ -4156,19 +6240,78 @@ def take_2d_axis1_float32_float64(ndarray[float32_t, ndim=2] values,
             float64_t *v, *o
 
         if (values.strides[0] == out.strides[0] and
-            values.strides[0] == sizeof(float64_t) and
-            sizeof(float64_t) * n >= 256):
+            values.strides[0] == sizeof(float64_t)):
+            
+            # GH3130
+            if sizeof(float64_t) * n >= 256:
+                for j from 0 <= j < k:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        memmove(o, v, <size_t>(sizeof(float64_t) * n))
+                return
 
-            for j from 0 <= j < k:
-                idx = indexer[j]
-                if idx == -1:
-                    for i from 0 <= i < n:
-                        out[i, j] = fv
-                else:
-                    v = &values[0, idx]
-                    o = &out[0, j]
-                    memmove(o, v, <size_t>(sizeof(float64_t) * n))
-            return
+            # detect 128-bit alignment
+            elif (values.strides[1] % 16 == 0 and
+                  out.strides[1] % 16 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 16 == 0):
+                for j from 0 <= j < k:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                return
+
+            # detect 64-bit alignment and at least 32 bytes
+            elif (sizeof(float64_t) * n >= 32 and
+                  values.strides[1] % 8 == 0 and
+                  out.strides[1] % 8 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 8 == 0):
+                # split cases by parity to help out the branch predictor
+                for j from 0 <= j < k by 2:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    elif idx % 2 == 0:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                for j from 1 <= j < k by 2:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    elif idx % 2 == 0:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                return
 
     for j from 0 <= j < k:
         idx = indexer[j]
@@ -4202,19 +6345,78 @@ def take_2d_axis1_float64_float64(ndarray[float64_t, ndim=2] values,
             float64_t *v, *o
 
         if (values.strides[0] == out.strides[0] and
-            values.strides[0] == sizeof(float64_t) and
-            sizeof(float64_t) * n >= 256):
+            values.strides[0] == sizeof(float64_t)):
+            
+            # GH3130
+            if sizeof(float64_t) * n >= 256:
+                for j from 0 <= j < k:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        memmove(o, v, <size_t>(sizeof(float64_t) * n))
+                return
 
-            for j from 0 <= j < k:
-                idx = indexer[j]
-                if idx == -1:
-                    for i from 0 <= i < n:
-                        out[i, j] = fv
-                else:
-                    v = &values[0, idx]
-                    o = &out[0, j]
-                    memmove(o, v, <size_t>(sizeof(float64_t) * n))
-            return
+            # detect 128-bit alignment
+            elif (values.strides[1] % 16 == 0 and
+                  out.strides[1] % 16 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 16 == 0):
+                for j from 0 <= j < k:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                return
+
+            # detect 64-bit alignment and at least 32 bytes
+            elif (sizeof(float64_t) * n >= 32 and
+                  values.strides[1] % 8 == 0 and
+                  out.strides[1] % 8 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 8 == 0):
+                # split cases by parity to help out the branch predictor
+                for j from 0 <= j < k by 2:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    elif idx % 2 == 0:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                for j from 1 <= j < k by 2:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    elif idx % 2 == 0:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                return
 
     for j from 0 <= j < k:
         idx = indexer[j]
@@ -4248,19 +6450,78 @@ def take_2d_axis1_object_object(ndarray[object, ndim=2] values,
             object *v, *o
 
         if (values.strides[0] == out.strides[0] and
-            values.strides[0] == sizeof(object) and
-            sizeof(object) * n >= 256):
+            values.strides[0] == sizeof(object)):
+            
+            # GH3130
+            if sizeof(object) * n >= 256:
+                for j from 0 <= j < k:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        memmove(o, v, <size_t>(sizeof(object) * n))
+                return
 
-            for j from 0 <= j < k:
-                idx = indexer[j]
-                if idx == -1:
-                    for i from 0 <= i < n:
-                        out[i, j] = fv
-                else:
-                    v = &values[0, idx]
-                    o = &out[0, j]
-                    memmove(o, v, <size_t>(sizeof(object) * n))
-            return
+            # detect 128-bit alignment
+            elif (values.strides[1] % 16 == 0 and
+                  out.strides[1] % 16 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 16 == 0):
+                for j from 0 <= j < k:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                return
+
+            # detect 64-bit alignment and at least 32 bytes
+            elif (sizeof(object) * n >= 32 and
+                  values.strides[1] % 8 == 0 and
+                  out.strides[1] % 8 == 0 and
+                  (&values[0, 0] - &out[0, 0]) % 8 == 0):
+                # split cases by parity to help out the branch predictor
+                for j from 0 <= j < k by 2:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    elif idx % 2 == 0:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                for j from 1 <= j < k by 2:
+                    idx = indexer[j]
+                    if idx == -1:
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = fv
+                    elif idx % 2 == 0:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                    else:
+                        v = &values[0, idx]
+                        o = &out[0, j]
+                        for i from 0 <= i < n:
+                            o[i] = v[i]
+                return
 
     for j from 0 <= j < k:
         idx = indexer[j]

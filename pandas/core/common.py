@@ -42,6 +42,69 @@ class AmbiguousIndexError(PandasError, KeyError):
     pass
 
 
+def aligned_empty(shape, dtype=np.float_, order='C'):
+    """
+    Create an empty ndarray aligned to a 128-bit boundary
+
+    Additional, ensure alignment of the last (for C-contiguous) or first (for
+    F-contiguous) dimension to a 128-bit boundary in cases where it can be
+    achieved without increasing the size of the allocation by a factor greater
+    than 4/3
+    """
+    if not isinstance(shape, tuple):
+        shape = (shape,)
+    dtype = np.dtype(dtype)
+
+    if order not in ('C', 'F'):
+        raise AssertionError('Order must be "C" or "F"')
+    if len(shape) < 1:
+        raise AssertionError('Number of dimensions must be > 0')
+
+    if (np.prod(shape) == 0 or 
+        not issubclass(dtype.type, (np.number, np.bool_))):
+        return np.empty(shape, dtype=dtype, order=order)
+
+    def gcd(a, b):
+        while b: 
+            a, b = b, a % b
+        return a
+
+    adim = 0 if order == 'F' else len(shape) - 1
+    amax = gcd(shape[adim] * dtype.itemsize, 16) # 16 => 128 bit align
+    atype = np.dtype(np.uint64)
+    if atype.alignment > amax or atype.alignment < atype.itemsize:
+        atype = np.dtype(np.uint32)
+    if atype.alignment > amax or atype.alignment < atype.itemsize:
+        atype = np.dtype(np.uint16)
+    if atype.alignment > amax or atype.alignment < atype.itemsize:
+        atype = np.dtype(np.uint8)
+
+    def lcm(a, b):
+        return a * b // gcd(a, b)
+    
+    slicer = [slice(0, shape[i], 1) for i in range(len(shape))]
+    anum = lcm(dtype.itemsize, 16) / atype.itemsize # 16 => 128 bit align
+    ashape = [shape[i] for i in range(len(shape))]
+    num = (shape[adim] * dtype.itemsize) / atype.itemsize
+    if num >= (anum * 3) / 2:
+        num += (anum - (num % anum)) % anum
+    # try next alignment lower
+    elif anum % 2 == 0 and num >= (anum * 3) / 4:
+        num += ((anum / 2) - (num % (anum / 2))) % (anum / 2)
+    # try next alignment lower
+    elif anum % 4 == 0 and num >= (anum * 3) / 8:
+        num += ((anum / 4) - (num % (anum / 4))) % (anum / 4)
+    ashape[adim] = num
+
+    afactor = 16 / atype.itemsize # 16 => 128 bit align
+    asize = np.prod(ashape)
+    tmp = np.empty(asize + afactor - 1, dtype=atype)
+    address = tmp.__array_interface__['data'][0]
+    offset = (afactor - ((address / atype.itemsize) % afactor)) % afactor
+    tmp = tmp[offset:offset+asize].reshape(ashape, order=order)
+    return tmp.view(dtype=dtype)[slicer]
+
+
 def isnull(obj):
     '''
     Detect missing values (NaN in numeric arrays, None/NaN in object arrays)
@@ -138,7 +201,7 @@ def _isnull_ndarraylike(obj):
         if values.dtype.kind in ('S', 'U'):
             result = np.zeros(values.shape, dtype=bool)
         else:
-            result = np.empty(shape, dtype=bool)
+            result = aligned_empty(shape, dtype=bool)
             vec = lib.isnullobj(values.ravel())
             result[:] = vec.reshape(shape)
 
@@ -167,7 +230,7 @@ def _isnull_ndarraylike_old(obj):
         if values.dtype.kind in ('S', 'U'):
             result = np.zeros(values.shape, dtype=bool)
         else:
-            result = np.empty(shape, dtype=bool)
+            result = aligned_empty(shape, dtype=bool)
             vec = lib.isnullobj_old(values.ravel())
             result[:] = vec.reshape(shape)
 
@@ -225,7 +288,7 @@ def mask_missing(arr, values_to_mask):
             # return value, which is not good
             if not isinstance(mask,np.ndarray):
                 m = mask
-                mask = np.empty(arr.shape,dtype=np.bool)
+                mask = aligned_empty(arr.shape, dtype=np.bool)
                 mask.fill(m)
         else:
             mask = mask | (arr == x)
@@ -517,14 +580,14 @@ def take_nd(arr, indexer, axis=0, out=None, fill_value=np.nan,
         out_shape = list(arr.shape)
         out_shape[axis] = len(indexer)
         out_shape = tuple(out_shape)
-        if arr.flags.f_contiguous and axis == arr.ndim - 1:
+        if arr.strides[0] == dtype.itemsize and axis != 0:
             # minor tweak that can make an order-of-magnitude difference
             # for dataframes initialized directly from 2-d ndarrays
             # (s.t. df.values is c-contiguous and df._data.blocks[0] is its
             # f-contiguous transpose)
-            out = np.empty(out_shape, dtype=dtype, order='F')
+            out = aligned_empty(out_shape, dtype=dtype, order='F')
         else:
-            out = np.empty(out_shape, dtype=dtype)
+            out = aligned_empty(out_shape, dtype=dtype)
 
     func = _get_take_nd_function(arr.ndim, arr.dtype, out.dtype,
                                  axis=axis, mask_info=mask_info)
@@ -586,7 +649,7 @@ def take_2d_multi(arr, indexer, out=None, fill_value=np.nan,
     # and the fill_value
     if out is None:
         out_shape = len(row_idx), len(col_idx)
-        out = np.empty(out_shape, dtype=dtype)
+        out = aligned_empty(out_shape, dtype=dtype)
 
     func = _take_2d_multi_dict.get((arr.dtype.name, out.dtype.name), None)
     if func is None and arr.dtype != out.dtype:
@@ -599,6 +662,95 @@ def take_2d_multi(arr, indexer, out=None, fill_value=np.nan,
                                    fill_value=fill_value, mask_info=mask_info)
     func(arr, indexer, out=out, fill_value=fill_value)
     return out
+
+
+def aligned_copy(arr):
+    shape = arr.shape
+    dtype = arr.dtype
+
+    if len(shape) < 1:
+        raise AssertionError('Number of dimensions must be > 0')
+
+    if (np.prod(shape) == 0 or
+        not issubclass(dtype.type, (np.number, np.bool_))):
+        return arr.copy()
+
+    adim = len(shape) - 1
+    if len(shape) > 1:
+        size = dtype.itemsize
+        for i in range(len(shape)):
+            if arr.strides[i] < size:
+                break
+            size = arr.strides[i] * shape[i]
+        else:
+            adim = 0
+
+    return take_nd(arr, None, axis=(len(shape) - adim - 1), allow_fill=False)
+
+
+def _maybe_align(arr):
+    shape = arr.shape
+    dtype = arr.dtype
+
+    if len(shape) < 1:
+        raise AssertionError('Number of dimensions must be > 0')
+
+    if (np.prod(shape) == 0 or
+        not issubclass(dtype.type, (np.number, np.bool_))):
+        return arr
+
+    order = 'C'
+    adim = len(shape) - 1
+    if len(shape) > 1:
+        size = dtype.itemsize
+        for i in range(len(shape)):
+            if arr.strides[i] < size:
+                break
+            size = arr.strides[i] * shape[i]
+        else:
+            order = 'F'
+            adim = 0
+
+    def gcd(a, b):
+        while b: 
+            a, b = b, a % b
+        return a
+
+    adim = 0 if order == 'F' else len(shape) - 1
+    amax = gcd(shape[adim] * dtype.itemsize, 16) # 16 => 128 bit align
+    atype = np.dtype(np.uint64)
+    if atype.alignment > amax or atype.alignment < atype.itemsize:
+        atype = np.dtype(np.uint32)
+    if atype.alignment > amax or atype.alignment < atype.itemsize:
+        atype = np.dtype(np.uint16)
+    if atype.alignment > amax or atype.alignment < atype.itemsize:
+        atype = np.dtype(np.uint8)
+ 
+    def lcm(a, b):
+        return a * b // gcd(a, b)
+
+    address = arr.__array_interface__['data'][0]
+    if address % 16 == 0: # 16 => 128 bit align
+        anum = lcm(dtype.itemsize, 16) / atype.itemsize # 16 => 128 bit align
+        num = (shape[adim] * dtype.itemsize) / atype.itemsize
+        if num >= (anum * 3) / 2:
+            num += (anum - (num % anum)) % anum
+        # try next alignment lower
+        elif anum % 2 == 0 and num >= (anum * 3) / 4:
+            num += ((anum / 2) - (num % (anum / 2))) % (anum / 2)
+        # try next alignment lower
+        elif anum % 4 == 0 and num >= (anum * 3) / 8:
+            num += ((anum / 4) - (num % (anum / 4))) % (anum / 4)
+
+        for i in range(len(shape)):
+            if i == adim:
+                continue
+            if arr.strides[i] % (num * atype.itemsize) != 0:
+                break
+        else:
+            return arr
+
+    return take_nd(arr, None, axis=(len(shape) - adim - 1), allow_fill=False)
 
 
 _diff_special = {
@@ -619,7 +771,7 @@ def diff(arr, n, axis=0):
     elif issubclass(dtype.type, np.bool_):
         dtype = np.object_
 
-    out_arr = np.empty(arr.shape, dtype=dtype)
+    out_arr = aligned_empty(arr.shape, dtype=dtype)
 
     na_indexer = [slice(None)] * arr.ndim
     na_indexer[axis] = slice(None, n) if n >= 0 else slice(n, None)
@@ -651,7 +803,8 @@ def _infer_dtype_from_scalar(val):
     # a 1-element ndarray
     if isinstance(val, pa.Array):
         if val.ndim != 0:
-            raise ValueError("invalid ndarray passed to _infer_dtype_from_scalar")
+            raise ValueError("invalid ndarray passed to "
+                             "_infer_dtype_from_scalar")
 
         dtype = val.dtype
         val   = val.item()
@@ -708,8 +861,8 @@ def _maybe_promote(dtype, fill_value=np.nan):
                 try:
                     fill_value = lib.Timestamp(fill_value).value
                 except:
-                    # the proper thing to do here would probably be to upcast to
-                    # object (but numpy 1.6.1 doesn't do this properly)
+                    # the proper thing to do here would probably be to upcast
+                    # to object (but numpy 1.6.1 doesn't do this properly)
                     fill_value = tslib.iNaT
             else:
                 fill_value = tslib.iNaT
@@ -745,18 +898,20 @@ def _maybe_promote(dtype, fill_value=np.nan):
 
 
 def _maybe_upcast_putmask(result, mask, other, dtype=None, change=None):
-    """ a safe version of put mask that (potentially upcasts the result
-        return the result
-        if change is not None, then MUTATE the change (and change the dtype)
-        return a changed flag
-        """
+    """
+    a safe version of put mask that (potentially upcasts the result
+    return the result
+
+    if change is not None, then MUTATE the change (and change the dtype)
+    return a changed flag
+    """
 
     if mask.any():
-
         def changeit():
 
             # our type is wrong here, need to upcast
-            r, fill_value = _maybe_upcast(result, fill_value=other, dtype=dtype, copy=True)
+            r, fill_value = _maybe_upcast(result, fill_value=other,
+                                          dtype=dtype, copy=True)
             np.putmask(r, mask, other)
                 
             # we need to actually change the dtype here
@@ -767,15 +922,17 @@ def _maybe_upcast_putmask(result, mask, other, dtype=None, change=None):
             return r, True
 
         # we want to decide whether putmask will work
-        # if we have nans in the False portion of our mask then we need to upcast (possibily)
-        # otherwise we DON't want to upcast (e.g. if we are have values, say integers in
-        # the success portion then its ok to not upcast)
+        # if we have nans in the False portion of our mask then we need to
+        # upcast (possibily), otherwise we DON't want to upcast (e.g. if we are
+        # have values, say integers in the success portion then its ok to not
+        # upcast)
         new_dtype, fill_value = _maybe_promote(result.dtype,other)
         if new_dtype != result.dtype:
 
             # we have a scalar or len 0 ndarray 
             # and its nan and we are changing some values
-            if np.isscalar(other) or (isinstance(other,np.ndarray) and other.ndim < 1):
+            if (np.isscalar(other) or
+                (isinstance(other,np.ndarray) and other.ndim < 1)):
                 if isnull(other):
                     return changeit()
 
@@ -793,14 +950,20 @@ def _maybe_upcast_putmask(result, mask, other, dtype=None, change=None):
     return result, False
 
 def _maybe_upcast(values, fill_value=np.nan, dtype=None, copy=False):
-    """ provide explicty type promotion and coercion
+    """ 
+    Provide explicit type promotion and coercion
 
-        Parameters
-        ----------
-        values : the ndarray that we want to maybe upcast
-        fill_value : what we want to fill with
-        dtype : if None, then use the dtype of the values, else coerce to this type
-        copy : if True always make a copy even if no upcast is required """
+    Parameters
+    ----------
+    values : ndarray
+        The ndarray that we want to maybe upcast
+    fill_value : any, default np.nan
+        What we want to fill with
+    dtype : dtype, default None
+        If None, then use the dtype of the values, else coerce to this type
+    copy : boolean, default True
+        If True always make a copy even if no upcast is required
+    """
 
     if dtype is None:
         dtype = values.dtype
@@ -832,11 +995,15 @@ def _possibly_downcast_to_dtype(result, dtype):
     try:
         if issubclass(dtype.type,np.floating):
             return result.astype(dtype)
+
         elif dtype == np.bool_ or issubclass(dtype.type,np.integer):
-            if issubclass(result.dtype.type, np.number) and notnull(result).all():
+            if (issubclass(result.dtype.type, np.number) and
+                notnull(result).all()):
+
                 new_result = result.astype(dtype)
                 if (new_result == result).all():
                     return new_result
+
     except:
         pass
 
@@ -959,7 +1126,8 @@ def _consensus_name_attr(objs):
 # Lots of little utilities
 
 
-def _possibly_convert_objects(values, convert_dates=True, convert_numeric=True):
+def _possibly_convert_objects(values, convert_dates=True,
+                              convert_numeric=True):
     """ if we have an object dtype, try to coerce dates and/or numers """
 
     # convert dates
@@ -967,19 +1135,22 @@ def _possibly_convert_objects(values, convert_dates=True, convert_numeric=True):
 
         # we take an aggressive stance and convert to datetime64[ns]
         if convert_dates == 'coerce':
-            new_values = _possibly_cast_to_datetime(values, 'M8[ns]', coerce = True)
+            new_values = _possibly_cast_to_datetime(values, 'M8[ns]',
+                                                    coerce=True)
 
             # if we are all nans then leave me alone
             if not isnull(new_values).all():
                 values = new_values
 
         else:
-            values = lib.maybe_convert_objects(values, convert_datetime=convert_dates)
+            values = lib.maybe_convert_objects(values,
+                                               convert_datetime=convert_dates)
 
     # convert to numeric
     if convert_numeric and values.dtype == np.object_:
         try:
-            new_values = lib.maybe_convert_numeric(values,set(),coerce_numeric=True)
+            new_values = lib.maybe_convert_numeric(values, set(),
+                                                   coerce_numeric=True)
 
             # if we are all nans then leave me alone
             if not isnull(new_values).all():
@@ -1011,16 +1182,21 @@ def _possibly_cast_to_timedelta(value, coerce=True):
             value = value.astype('timedelta64[ns]')
         return value
 
-    # we don't have a timedelta, but we want to try to convert to one (but don't force it)
+    # we don't have a timedelta, but we want to try to convert to one (but
+    # don't force it)
     if coerce:
-        new_value = tslib.array_to_timedelta64(value.astype(object), coerce=False)
+        new_value = tslib.array_to_timedelta64(value.astype(object),
+                                               coerce=False)
         if new_value.dtype == 'i8':
             value = np.array(new_value,dtype='timedelta64[ns]')
 
     return value
 
 def _possibly_cast_to_datetime(value, dtype, coerce = False):
-    """ try to cast the array/value to a datetimelike dtype, converting float nan to iNaT """
+    """
+    try to cast the array/value to a datetimelike dtype, converting float nan
+    to iNaT
+    """
 
     if dtype is not None:
         if isinstance(dtype, basestring):
@@ -1045,7 +1221,8 @@ def _possibly_cast_to_datetime(value, dtype, coerce = False):
                 elif np.prod(value.shape) and value.dtype != dtype:
                     try:
                         if is_datetime64:
-                            value = tslib.array_to_datetime(value, coerce = coerce)
+                            value = tslib.array_to_datetime(value,
+                                                            coerce=coerce)
                         elif is_timedelta64:
                             value = _possibly_cast_to_timedelta(value)
                     except:
@@ -1053,13 +1230,17 @@ def _possibly_cast_to_datetime(value, dtype, coerce = False):
 
     else:
 
-        # only do this if we have an array and the dtype of the array is not setup already
+        # only do this if we have an array and the dtype of the array is not
+        # setup already
         # we are not an integer/object, so don't bother with this conversion
-        if isinstance(value, np.ndarray) and not (issubclass(value.dtype.type, np.integer) or value.dtype == np.object_):
+        if (isinstance(value, np.ndarray) and
+            not (issubclass(value.dtype.type, np.integer) or
+                 value.dtype == np.object_)):
             pass
 
         else:
-            # we might have a array (or single object) that is datetime like, and no dtype is passed
+            # we might have a array (or single object) that is datetime like,
+            # and no dtype is passed
             # don't change the value unless we find a datetime set
             v = value
             if not is_list_like(v):
@@ -1334,7 +1515,7 @@ def _asarray_tuplesafe(values, dtype=None):
         else:
             # Making a 1D array that safely contains tuples is a bit tricky
             # in numpy, leading to the following
-            result = np.empty(len(values), dtype=object)
+            result = aligned_empty(len(values), dtype=object)
             result[:] = values
 
     return result
@@ -1434,7 +1615,8 @@ def is_float_dtype(arr_or_dtype):
 
 
 def is_list_like(arg):
-    return hasattr(arg, '__iter__') and not isinstance(arg, basestring) or hasattr(arg,'len')
+    return ((hasattr(arg, '__iter__') and not isinstance(arg, basestring))
+            or hasattr(arg,'len'))
 
 def _is_sequence(x):
     try:

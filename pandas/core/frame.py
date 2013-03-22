@@ -22,14 +22,15 @@ from numpy import nan as NA
 import numpy as np
 import numpy.ma as ma
 
-from pandas.core.common import (isnull, notnull, PandasError, _try_sort,
+from pandas.core.common import (isnull, notnull, aligned_empty, aligned_copy,
+                                PandasError, _maybe_align, _try_sort,
                                 _default_index, _maybe_upcast, _is_sequence,
                                 _infer_dtype_from_scalar)
 from pandas.core.generic import NDFrame
 from pandas.core.index import Index, MultiIndex, _ensure_index
 from pandas.core.indexing import (_NDFrameIndexer, _maybe_droplevels,
-                                  _convert_to_index_sliceable, _check_bool_indexer,
-                                  _maybe_convert_indices)
+                                  _convert_to_index_sliceable,
+                                  _check_bool_indexer, _maybe_convert_indices)
 from pandas.core.internals import BlockManager, make_block, form_blocks
 from pandas.core.series import Series, _radd_compat
 import pandas.core.expressions as expressions
@@ -190,10 +191,11 @@ class DataConflictError(Exception):
 def _arith_method(op, name, str_rep = None, default_axis='columns'):
     def na_op(x, y):
         try:
-            result = expressions.evaluate(op, str_rep, x, y, raise_on_error=True)
+            result = expressions.evaluate(op, str_rep, x, y,
+                                          raise_on_error=True)
         except TypeError:
             xrav = x.ravel()
-            result = np.empty(x.size, dtype=x.dtype)
+            result = aligned_empty(x.size, dtype=x.dtype)
             if isinstance(y, np.ndarray):
                 yrav = y.ravel()
                 mask = notnull(xrav) & notnull(yrav)
@@ -248,7 +250,7 @@ def _flex_comp_method(op, name, str_rep = None, default_axis='columns'):
             result = op(x, y)
         except TypeError:
             xrav = x.ravel()
-            result = np.empty(x.size, dtype=x.dtype)
+            result = aligned_empty(x.size, dtype=x.dtype)
             if isinstance(y, np.ndarray):
                 yrav = y.ravel()
                 mask = notnull(xrav) & notnull(yrav)
@@ -440,7 +442,7 @@ class DataFrame(NDFrame):
                 if dtype is None:
                     dtype, data = _infer_dtype_from_scalar(data)
 
-                values = np.empty((len(index), len(columns)), dtype=dtype)
+                values = aligned_empty((len(index), len(columns)), dtype=dtype)
                 values.fill(data)
                 mgr = self._init_ndarray(values, index, columns, dtype=dtype,
                                          copy=False)
@@ -503,9 +505,9 @@ class DataFrame(NDFrame):
 
                     if dtype is None:
                         # #1783
-                        v = np.empty(len(index), dtype=object)
+                        v = aligned_empty(len(index), dtype=object)
                     else:
-                        v = np.empty(len(index), dtype=dtype)
+                        v = aligned_empty(len(index), dtype=dtype)
 
                     v.fill(NA)
                 else:
@@ -2296,7 +2298,7 @@ class DataFrame(NDFrame):
             flat_index = ridx * len(self.columns) + cidx
             result = values.flat[flat_index]
         else:
-            result = np.empty(n, dtype='O')
+            result = aligned_empty(n, dtype='O')
             for i, (r, c) in enumerate(izip(row_labels, col_labels)):
                 result[i] = self.get_value(r, c)
 
@@ -4188,7 +4190,7 @@ class DataFrame(NDFrame):
         else:  # pragma: no cover
             raise ValueError('Axis must be 0 or 1, got %s' % axis)
 
-        result_values = np.empty_like(target.values)
+        result_values = aligned_empty(target.values.shape, target.values.dtype)
         columns = target.columns
         for i, col in enumerate(columns):
             result_values[:, i] = func(target[col])
@@ -4409,7 +4411,7 @@ class DataFrame(NDFrame):
             mat = mat.T
             corrf = nanops.get_corr_func(method)
             K = len(cols)
-            correl = np.empty((K, K), dtype=float)
+            correl = aligned_empty((K, K), dtype=float)
             mask = np.isfinite(mat)
             for i, ac in enumerate(mat):
                 for j, bc in enumerate(mat):
@@ -4448,7 +4450,7 @@ class DataFrame(NDFrame):
 
         if notnull(mat).all():
             if min_periods is not None and min_periods > len(mat):
-                baseCov = np.empty((mat.shape[1], mat.shape[1]))
+                baseCov = aligned_empty((mat.shape[1], mat.shape[1]))
                 baseCov.fill(np.nan)
             else:
                 baseCov = np.cov(mat.T)
@@ -5236,10 +5238,10 @@ def group_agg(values, bounds, f):
     """
     if values.ndim == 1:
         N = len(values)
-        result = np.empty(len(bounds), dtype=float)
+        result = aligned_empty(len(bounds), dtype=float)
     elif values.ndim == 2:
         N, K = values.shape
-        result = np.empty((len(bounds), K), dtype=float)
+        result = aligned_empty((len(bounds), K), dtype=float)
 
     testagg = f(values[:min(1, len(values))])
     if isinstance(testagg, np.ndarray) and testagg.ndim == 2:
@@ -5362,7 +5364,7 @@ def extract_index(data):
 def _prep_ndarray(values, copy=True):
     if not isinstance(values, np.ndarray):
         if len(values) == 0:
-            return np.empty((0, 0), dtype=object)
+            return aligned_empty((0, 0), dtype=object)
 
         def convert(v):
             return com._possibly_convert_platform(v)
@@ -5379,7 +5381,7 @@ def _prep_ndarray(values, copy=True):
         # drop subclass info, do not copy data
         values = np.asarray(values)
         if copy:
-            values = values.copy()
+            values = aligned_copy(values)
 
     if values.ndim == 1:
         values = values.reshape((values.shape[0], 1))

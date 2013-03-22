@@ -4,7 +4,8 @@ from datetime import datetime
 from numpy import nan
 import numpy as np
 
-from pandas.core.common import _possibly_downcast_to_dtype, isnull
+from pandas.core.common import (_possibly_downcast_to_dtype, aligned_empty,
+                                isnull)
 from pandas.core.index import Index, _ensure_index, _handle_legacy_indexes
 from pandas.core.indexing import _check_slice_bounds, _maybe_convert_indices
 import pandas.core.common as com
@@ -439,7 +440,7 @@ class Block(object):
                                 % (repr(other),str(detail)))
             else:
                 # return the values
-                result = np.empty(values.shape,dtype='O')
+                result = aligned_empty(values.shape, dtype='O')
                 result.fill(np.nan)
 
         if not isinstance(result, np.ndarray):
@@ -509,11 +510,11 @@ class Block(object):
                 return np.where(c,v,o)
             except (Exception), detail:
                 if raise_on_error:
-                    raise TypeError('Could not operate [%s] with block values [%s]'
-                                    % (repr(o),str(detail)))
+                    raise TypeError('Could not operate [%s] with block values '
+                                    '[%s]' % (repr(o),str(detail)))
                 else:
                     # return the values
-                    result = np.empty(v.shape,dtype='float64')
+                    result = aligned_empty(v.shape,dtype='float64')
                     result.fill(np.nan)
                     return result
 
@@ -721,15 +722,19 @@ class DatetimeBlock(Block):
             values = values[:,slicer]
         mask = isnull(values)
 
-        rvalues = np.empty(self.shape,dtype=object)
+        rvalues = aligned_empty(self.shape, dtype=object)
         if na_rep is None:
             na_rep = 'NaT'
         rvalues[mask] = na_rep
         imask = (-mask).ravel()
         if self.dtype == 'datetime64[ns]':
-            rvalues.flat[imask] = np.array([ Timestamp(val)._repr_base for val in values.ravel()[imask] ],dtype=object)
+            rvalues.flat[imask] = np.array([Timestamp(val)._repr_base
+                                            for val in values.ravel()[imask]],
+                                           dtype=object)
         elif self.dtype == 'timedelta64[ns]':
-            rvalues.flat[imask] = np.array([ lib.repr_timedelta64(val) for val in values.ravel()[imask] ],dtype=object)
+            rvalues.flat[imask] = np.array([lib.repr_timedelta64(val)
+                                            for val in values.ravel()[imask]],
+                                           dtype=object)
         return rvalues.tolist()
 
     def should_store(self, value):
@@ -1163,7 +1168,7 @@ class BlockManager(object):
 
     def as_matrix(self, items=None):
         if len(self.blocks) == 0:
-            mat = np.empty(self.shape, dtype=float)
+            mat = aligned_empty(self.shape, dtype=float)
         elif len(self.blocks) == 1:
             blk = self.blocks[0]
             if items is None or blk.items.equals(items):
@@ -1187,7 +1192,7 @@ class BlockManager(object):
         dtype = _interleaved_dtype(self.blocks)
         items = _ensure_index(items)
 
-        result = np.empty(self.shape, dtype=dtype)
+        result = aligned_empty(self.shape, dtype=dtype)
         itemmask = np.zeros(len(items), dtype=bool)
 
         # By construction, all of the item should be covered by one of the
@@ -1265,7 +1270,7 @@ class BlockManager(object):
 
         items = self.items
         n = len(items)
-        result = np.empty(n, dtype=dtype)
+        result = aligned_empty(n, dtype=dtype)
         for blk in self.blocks:
             for j, item in enumerate(blk.items):
                 i = items.get_loc(item)
@@ -1566,7 +1571,7 @@ class BlockManager(object):
         block_shape[0] = len(items)
 
         dtype, fill_value = com._infer_dtype_from_scalar(fill_value)
-        block_values = np.empty(block_shape, dtype=dtype)
+        block_values = aligned_empty(block_shape, dtype=dtype)
         block_values.fill(fill_value)
         na_block = make_block(block_values, items, ref_items)
         return na_block
@@ -1678,7 +1683,7 @@ class BlockManager(object):
     @property
     def block_id_vector(self):
         # TODO
-        result = np.empty(len(self.items), dtype=int)
+        result = aligned_empty(len(self.items), dtype=int)
         result.fill(-1)
 
         for i, blk in enumerate(self.blocks):
@@ -1693,7 +1698,7 @@ class BlockManager(object):
 
     @property
     def item_dtypes(self):
-        result = np.empty(len(self.items), dtype='O')
+        result = aligned_empty(len(self.items), dtype='O')
         mask = np.zeros(len(self.items), dtype=bool)
         for i, blk in enumerate(self.blocks):
             indexer = self.items.get_indexer(blk.items)
@@ -1775,7 +1780,7 @@ def form_blocks(arrays, names, axes):
         shape = (len(extra_items),) + tuple(len(x) for x in axes[1:])
 
         # empty items -> dtype object
-        block_values = np.empty(shape, dtype=object)
+        block_values = aligned_empty(shape, dtype=object)
 
         block_values.fill(nan)
 
@@ -1787,7 +1792,10 @@ def form_blocks(arrays, names, axes):
 
 
 def _simple_blockify(tuples, ref_items, dtype):
-    """ return a single array of a block that has a single dtype; if dtype is not None, coerce to this dtype """
+    """
+    return a single array of a block that has a single dtype; if dtype is
+    not None, coerce to this dtype
+    """
     block_items, values = _stack_arrays(tuples, ref_items, dtype)
 
     # CHECK DTYPE?
@@ -1838,7 +1846,7 @@ def _stack_arrays(tuples, ref_items, dtype):
     first = arrays[0]
     shape = (len(arrays),) + _shape_compat(first)
 
-    stacked = np.empty(shape, dtype=dtype)
+    stacked = aligned_empty(shape, dtype=dtype)
     for i, arr in enumerate(arrays):
         stacked[i] = _asarray_compat(arr)
 
