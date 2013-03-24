@@ -51,7 +51,9 @@ def aligned_empty(shape, dtype=np.float_, order='C'):
     achieved without increasing the size of the allocation by a factor greater
     than 4/3
     """
-    if not isinstance(shape, tuple):
+    if isinstance(shape, list):
+        shape = tuple(shape)
+    elif not isinstance(shape, tuple):
         shape = (shape,)
     dtype = np.dtype(dtype)
 
@@ -94,6 +96,9 @@ def aligned_empty(shape, dtype=np.float_, order='C'):
     # try next alignment lower
     elif anum % 4 == 0 and num >= (anum * 3) / 8:
         num += ((anum / 4) - (num % (anum / 4))) % (anum / 4)
+    # try next alignment lower
+    elif anum % 8 == 0 and num >= (anum * 3) / 16:
+        num += ((anum / 8) - (num % (anum / 8))) % (anum / 8)
     ashape[adim] = num
 
     afactor = 16 / atype.itemsize # 16 => 128 bit align
@@ -731,6 +736,9 @@ def _maybe_align(arr):
 
     address = arr.__array_interface__['data'][0]
     if address % 16 == 0: # 16 => 128 bit align
+        if len(shape) == 1:
+            return arr
+
         anum = lcm(dtype.itemsize, 16) / atype.itemsize # 16 => 128 bit align
         num = (shape[adim] * dtype.itemsize) / atype.itemsize
         if num >= (anum * 3) / 2:
@@ -741,6 +749,9 @@ def _maybe_align(arr):
         # try next alignment lower
         elif anum % 4 == 0 and num >= (anum * 3) / 8:
             num += ((anum / 4) - (num % (anum / 4))) % (anum / 4)
+        # try next alignment lower
+        elif anum % 8 == 0 and num >= (anum * 3) / 16:
+            num += ((anum / 8) - (num % (anum / 8))) % (anum / 8)
 
         for i in range(len(shape)):
             if i == adim:
